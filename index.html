@@ -56,7 +56,8 @@
       font-weight: bold;
     }
 
-    input {
+    input[type="number"],
+    input[type="time"] {
       width: 100%;
       padding: 10px;
       font-size: 1em;
@@ -115,6 +116,10 @@
       cursor: pointer;
       color: var(--text-color);
     }
+
+    .lunch-section.hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -131,11 +136,17 @@
     <label for="endTime">End Time</label>
     <input type="time" id="endTime">
 
-    <label for="lunchStart">Lunch Break Start</label>
-    <input type="time" id="lunchStart">
+    <label>
+      <input type="checkbox" id="disableLunch"> Disable Lunch Break
+    </label>
 
-    <label for="lunchEnd">Lunch Break End</label>
-    <input type="time" id="lunchEnd">
+    <div class="lunch-section" id="lunchSection">
+      <label for="lunchStart">Lunch Break Start</label>
+      <input type="time" id="lunchStart">
+
+      <label for="lunchEnd">Lunch Break End</label>
+      <input type="time" id="lunchEnd">
+    </div>
 
     <div class="buttons">
       <button id="start">Start</button>
@@ -157,8 +168,10 @@
 
       const startButton = document.getElementById("start");
       const stopButton = document.getElementById("stop");
-
       const themeToggle = document.getElementById("themeToggle");
+
+      const disableLunchCheckbox = document.getElementById("disableLunch");
+      const lunchSection = document.getElementById("lunchSection");
 
       let intervalId = null;
 
@@ -169,7 +182,6 @@
         themeToggle.textContent = dark ? "🌞" : "🌙";
       }
 
-      // Init theme
       const savedTheme = localStorage.getItem("theme");
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       setTheme(savedTheme === "dark" || (!savedTheme && prefersDark));
@@ -179,6 +191,11 @@
         setTheme(!isDark);
       });
 
+      // Show/hide lunch inputs
+      disableLunchCheckbox.addEventListener("change", () => {
+        lunchSection.classList.toggle("hidden", disableLunchCheckbox.checked);
+      });
+
       function parseTimeToDate(timeStr) {
         const [hours, minutes] = timeStr.split(":").map(Number);
         const now = new Date();
@@ -186,16 +203,20 @@
         return now;
       }
 
-      function getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd) {
+      function getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd, includeLunch) {
         if (now < start) return 0;
-        if (now >= end) return end - start - (lunchEnd - lunchStart);
+        if (now >= end) {
+          return end - start - (includeLunch ? (lunchEnd - lunchStart) : 0);
+        }
 
         let worked = now - start;
 
-        if (now >= lunchEnd) {
-          worked -= (lunchEnd - lunchStart);
-        } else if (now > lunchStart) {
-          worked -= (now - lunchStart);
+        if (includeLunch) {
+          if (now >= lunchEnd) {
+            worked -= (lunchEnd - lunchStart);
+          } else if (now > lunchStart) {
+            worked -= (now - lunchStart);
+          }
         }
 
         return worked;
@@ -211,10 +232,12 @@
         const now = new Date();
         const start = parseTimeToDate(startInput.value);
         const end = parseTimeToDate(endInput.value);
-        const lunchStart = parseTimeToDate(lunchStartInput.value);
-        const lunchEnd = parseTimeToDate(lunchEndInput.value);
 
-        const effectiveMs = getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd);
+        const includeLunch = !disableLunchCheckbox.checked;
+        const lunchStart = includeLunch ? parseTimeToDate(lunchStartInput.value) : null;
+        const lunchEnd = includeLunch ? parseTimeToDate(lunchEndInput.value) : null;
+
+        const effectiveMs = getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd, includeLunch);
         const earnings = (wage / 3600000) * effectiveMs;
 
         if (now >= end && intervalId !== null) {
@@ -228,12 +251,18 @@
       startButton.addEventListener("click", () => {
         if (intervalId !== null) return;
 
-        if (!wageInput.value || !startInput.value || !endInput.value || !lunchStartInput.value || !lunchEndInput.value) {
-          alert("Please fill in all fields.");
+        if (!wageInput.value || !startInput.value || !endInput.value) {
+          alert("Please fill in all required fields.");
           return;
         }
 
-        intervalId = setInterval(updateCounter, 100); // smoother updates
+        const includeLunch = !disableLunchCheckbox.checked;
+        if (includeLunch && (!lunchStartInput.value || !lunchEndInput.value)) {
+          alert("Please fill in lunch break times or disable it.");
+          return;
+        }
+
+        intervalId = setInterval(updateCounter, 100);
         updateCounter();
       });
 
