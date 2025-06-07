@@ -56,8 +56,7 @@
       font-weight: bold;
     }
 
-    input[type="number"],
-    input[type="time"] {
+    input {
       width: 100%;
       padding: 10px;
       font-size: 1em;
@@ -117,8 +116,12 @@
       color: var(--text-color);
     }
 
-    .section.hidden {
+    .hidden {
       display: none;
+    }
+
+    .section {
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -137,24 +140,29 @@
     <label for="endTime">End Time</label>
     <input type="time" id="endTime">
 
-    <label>
-      <input type="checkbox" id="disableLunch"> Disable Lunch Break
-    </label>
+    <div class="section">
+      <input type="checkbox" id="enableLunch">
+      <label for="enableLunch">Enable Lunch Break</label>
+    </div>
 
-    <div class="section" id="lunchSection">
+    <div class="section hidden" id="lunchSection">
       <label for="lunchStart">Lunch Break Start</label>
       <input type="time" id="lunchStart">
+
       <label for="lunchEnd">Lunch Break End</label>
       <input type="time" id="lunchEnd">
     </div>
 
-    <label>
-      <input type="checkbox" id="enableTips"> Enable Tips
-    </label>
+    <div class="section">
+      <input type="checkbox" id="enableTips">
+      <label for="enableTips">Enable Tips</label>
+    </div>
 
     <div class="section hidden" id="tipsSection">
-      <label for="tipAmount">Total Tips ($)</label>
-      <input type="number" step="0.01" id="tipAmount" placeholder="e.g. 15.00">
+      <label for="newTip">Add Tip ($)</label>
+      <input type="number" step="0.01" id="newTip" placeholder="e.g. 5.00">
+      <button type="button" id="addTipButton">Add Tip</button>
+      <p>Total Tips: $<span id="totalTipsDisplay">0.00</span></p>
     </div>
 
     <div class="buttons">
@@ -175,20 +183,21 @@
       const lunchStartInput = document.getElementById("lunchStart");
       const lunchEndInput = document.getElementById("lunchEnd");
 
-      const tipAmountInput = document.getElementById("tipAmount");
-
-      const startButton = document.getElementById("start");
-      const stopButton = document.getElementById("stop");
-
-      const disableLunchCheckbox = document.getElementById("disableLunch");
+      const enableLunchCheckbox = document.getElementById("enableLunch");
       const lunchSection = document.getElementById("lunchSection");
 
       const enableTipsCheckbox = document.getElementById("enableTips");
       const tipsSection = document.getElementById("tipsSection");
+      const newTipInput = document.getElementById("newTip");
+      const addTipButton = document.getElementById("addTipButton");
+      const totalTipsDisplay = document.getElementById("totalTipsDisplay");
 
+      const startButton = document.getElementById("start");
+      const stopButton = document.getElementById("stop");
       const themeToggle = document.getElementById("themeToggle");
 
       let intervalId = null;
+      let totalTips = 0;
 
       function setTheme(dark) {
         document.body.classList.toggle("dark", dark);
@@ -205,9 +214,8 @@
         setTheme(!isDark);
       });
 
-      // Toggle sections
-      disableLunchCheckbox.addEventListener("change", () => {
-        lunchSection.classList.toggle("hidden", disableLunchCheckbox.checked);
+      enableLunchCheckbox.addEventListener("change", () => {
+        lunchSection.classList.toggle("hidden", !enableLunchCheckbox.checked);
       });
 
       enableTipsCheckbox.addEventListener("change", () => {
@@ -221,13 +229,13 @@
         return now;
       }
 
-      function getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd, includeLunch) {
+      function getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd) {
         if (now < start) return 0;
-        if (now >= end) return end - start - (includeLunch ? (lunchEnd - lunchStart) : 0);
+        if (now >= end) return end - start - (lunchEnd - lunchStart);
 
         let worked = now - start;
 
-        if (includeLunch) {
+        if (enableLunchCheckbox.checked) {
           if (now >= lunchEnd) {
             worked -= (lunchEnd - lunchStart);
           } else if (now > lunchStart) {
@@ -249,20 +257,19 @@
         const start = parseTimeToDate(startInput.value);
         const end = parseTimeToDate(endInput.value);
 
-        const includeLunch = !disableLunchCheckbox.checked;
-        const includeTips = enableTipsCheckbox.checked;
+        let lunchStart = start;
+        let lunchEnd = start;
 
-        const lunchStart = includeLunch ? parseTimeToDate(lunchStartInput.value) : null;
-        const lunchEnd = includeLunch ? parseTimeToDate(lunchEndInput.value) : null;
+        if (enableLunchCheckbox.checked) {
+          lunchStart = parseTimeToDate(lunchStartInput.value);
+          lunchEnd = parseTimeToDate(lunchEndInput.value);
+        }
 
-        const effectiveMs = getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd, includeLunch);
+        const effectiveMs = getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd);
         let earnings = (wage / 3600000) * effectiveMs;
 
-        if (includeTips) {
-          const tips = parseFloat(tipAmountInput.value);
-          if (!isNaN(tips) && tips > 0) {
-            earnings += tips;
-          }
+        if (enableTipsCheckbox.checked) {
+          earnings += totalTips;
         }
 
         if (now >= end && intervalId !== null) {
@@ -273,25 +280,38 @@
         counterDisplay.textContent = `$${earnings.toFixed(3)}`;
       }
 
+      function addTip() {
+        const tipVal = parseFloat(newTipInput.value);
+        if (!isNaN(tipVal) && tipVal > 0) {
+          totalTips += tipVal;
+          totalTipsDisplay.textContent = totalTips.toFixed(2);
+          newTipInput.value = '';
+          updateCounter();
+        }
+      }
+
+      addTipButton.addEventListener("click", addTip);
+      newTipInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          addTip();
+        }
+      });
+
       startButton.addEventListener("click", () => {
         if (intervalId !== null) return;
 
         if (!wageInput.value || !startInput.value || !endInput.value) {
-          alert("Please fill in all required fields.");
+          alert("Please fill in wage, start time, and end time.");
           return;
         }
 
-        const includeLunch = !disableLunchCheckbox.checked;
-        if (includeLunch && (!lunchStartInput.value || !lunchEndInput.value)) {
-          alert("Please fill in lunch times or disable it.");
+        if (enableLunchCheckbox.checked && (!lunchStartInput.value || !lunchEndInput.value)) {
+          alert("Please fill in lunch break times.");
           return;
         }
 
-        const includeTips = enableTipsCheckbox.checked;
-        if (includeTips && (!tipAmountInput.value || parseFloat(tipAmountInput.value) < 0)) {
-          alert("Please enter a valid tip amount or disable tips.");
-          return;
-        }
+        totalTips = 0;
+        totalTipsDisplay.textContent = "0.00";
 
         intervalId = setInterval(updateCounter, 100);
         updateCounter();
