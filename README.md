@@ -1,1 +1,0 @@
-# wage-tracker
