@@ -12,6 +12,7 @@
       --counter-bg: #e0e0e0;
       --button-green: #28a745;
       --button-red: #dc3545;
+      --button-blue: #007bff;
     }
 
     body.dark {
@@ -123,6 +124,20 @@
     .section {
       margin-top: 10px;
     }
+
+    .tip-row {
+      display: flex;
+      gap: 5px;
+      margin-top: 5px;
+    }
+
+    .tip-row input {
+      flex: 1;
+    }
+
+    #addTipButton {
+      background-color: var(--button-blue);
+    }
   </style>
 </head>
 <body>
@@ -160,8 +175,10 @@
 
     <div class="section hidden" id="tipsSection">
       <label for="newTip">Add Tip ($)</label>
-      <input type="number" step="0.01" id="newTip" placeholder="e.g. 5.00">
-      <button type="button" id="addTipButton">Add Tip</button>
+      <div class="tip-row">
+        <input type="number" step="0.01" id="newTip" placeholder="e.g. 5.00">
+        <button type="button" id="addTipButton">Add</button>
+      </div>
       <p>Total Tips: $<span id="totalTipsDisplay">0.00</span></p>
     </div>
 
@@ -223,6 +240,7 @@
       });
 
       function parseTimeToDate(timeStr) {
+        if (!timeStr) return null;
         const [hours, minutes] = timeStr.split(":").map(Number);
         const now = new Date();
         now.setHours(hours, minutes, 0, 0);
@@ -230,12 +248,12 @@
       }
 
       function getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd) {
-        if (now < start) return 0;
-        if (now >= end) return end - start - (lunchEnd - lunchStart);
+        if (!start || !end || now < start) return 0;
+        if (now >= end) now = end;
 
         let worked = now - start;
 
-        if (enableLunchCheckbox.checked) {
+        if (enableLunchCheckbox.checked && lunchStart && lunchEnd) {
           if (now >= lunchEnd) {
             worked -= (lunchEnd - lunchStart);
           } else if (now > lunchStart) {
@@ -257,13 +275,8 @@
         const start = parseTimeToDate(startInput.value);
         const end = parseTimeToDate(endInput.value);
 
-        let lunchStart = start;
-        let lunchEnd = start;
-
-        if (enableLunchCheckbox.checked) {
-          lunchStart = parseTimeToDate(lunchStartInput.value);
-          lunchEnd = parseTimeToDate(lunchEndInput.value);
-        }
+        const lunchStart = parseTimeToDate(lunchStartInput.value);
+        const lunchEnd = parseTimeToDate(lunchEndInput.value);
 
         const effectiveMs = getEffectiveWorkedTime(now, start, end, lunchStart, lunchEnd);
         let earnings = (wage / 3600000) * effectiveMs;
@@ -292,9 +305,7 @@
 
       addTipButton.addEventListener("click", addTip);
       newTipInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          addTip();
-        }
+        if (e.key === "Enter") addTip();
       });
 
       startButton.addEventListener("click", () => {
@@ -305,11 +316,7 @@
           return;
         }
 
-        if (enableLunchCheckbox.checked && (!lunchStartInput.value || !lunchEndInput.value)) {
-          alert("Please fill in lunch break times.");
-          return;
-        }
-
+        // Allow lunch break to be enabled even without times
         totalTips = 0;
         totalTipsDisplay.textContent = "0.00";
 
